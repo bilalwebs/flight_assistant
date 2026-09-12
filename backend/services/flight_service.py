@@ -1,7 +1,7 @@
 """
 Business logic layer for Flight operations.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,20 @@ from models.flight import Flight, CabinClass, FlightStatus
 from models.responses import FlightSchema, PriceBreakdown
 
 class FlightService:
+    @staticmethod
+    def _naive_utc(dt: datetime) -> datetime:
+        """Normalize a search date to naive UTC for schedule filtering.
+
+        Flight departure/arrival instants are persisted as naive UTC
+        (TIMESTAMP WITHOUT TIME ZONE on PostgreSQL), so any timezone-aware
+        value supplied by the API must be converted to UTC and stripped of its
+        offset before comparison — otherwise PostgreSQL rejects mixing
+        offset-aware and offset-naive datetimes.
+        """
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+
     @staticmethod
     async def search_flights(
         session: AsyncSession,
@@ -21,6 +35,7 @@ class FlightService:
         """Search for available flights based on route and date."""
         # Truncate time to match date filtering if needed,
         # but for now we look for flights on the specific day
+        date = FlightService._naive_utc(date)
         start = date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start.replace(hour=23, minute=59, second=59)
 
@@ -93,6 +108,7 @@ class FlightService:
         time_of_day: Optional[str] = None,  # "morning", "afternoon", "evening", "night"
     ) -> List[Flight]:
         """Filter flights with advanced criteria."""
+        date = FlightService._naive_utc(date)
         start = date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start.replace(hour=23, minute=59, second=59)
 

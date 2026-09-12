@@ -3,7 +3,6 @@ Booking, Passenger, and Payment SQLAlchemy ORM models.
 One booking contains 1-N passengers and exactly one payment record.
 """
 import enum
-from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime,
     Enum as SAEnum, Boolean, ForeignKey, Text,
@@ -11,6 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from database.database import Base
+from utils.datetime_utils import utcnow
 
 
 class BookingStatus(str, enum.Enum):
@@ -69,10 +69,10 @@ class Booking(Base):
 
     # Meta
     notes = Column(Text, nullable=True)
-    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
     cancellation_reason = Column(String(500), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     # Relationships
     user = relationship("User", back_populates="bookings", lazy="selectin")
@@ -105,7 +105,7 @@ class Passenger(Base):
     meal_preference = Column(String(50), nullable=True)     # e.g. vegetarian
     special_assistance = Column(Boolean, nullable=False, default=False)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     # Relationships
     booking = relationship("Booking", back_populates="passengers")
@@ -143,10 +143,10 @@ class Payment(Base):
     # Gateway response (Stripe API response, sanitized)
     gateway_response = Column(Text, nullable=True)
 
-    paid_at = Column(DateTime, nullable=True)
-    refunded_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+    refunded_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     # Relationships
     booking = relationship("Booking", back_populates="payment")

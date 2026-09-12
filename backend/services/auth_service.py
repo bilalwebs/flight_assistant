@@ -4,7 +4,7 @@ Phase 14 — Authentication Service.
 Handles user registration, login, password hashing, and JWT token generation.
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,7 @@ import secrets
 
 from config.settings import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 from models.user import User
+from utils.datetime_utils import utcnow
 
 
 class AuthenticationService:
@@ -55,7 +56,7 @@ class AuthenticationService:
         if expires_hours is None:
             expires_hours = JWT_EXPIRATION_HOURS
 
-        now = datetime.utcnow()
+        now = utcnow()
         expires = now + timedelta(hours=expires_hours)
         expires_in_seconds = int(expires_hours * 3600)
 

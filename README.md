@@ -63,6 +63,7 @@ Portfolio: **https://bilalfore.vercel.app**
     - [2. Seed the demo database (idempotent)](#2-seed-the-demo-database-idempotent)
     - [3. Run the backend](#3-run-the-backend)
     - [4. Frontend](#4-frontend)
+  - [Deployment](#deployment)
   - [Environment Variables](#environment-variables)
     - [Frontend (`frontend/.env.local` — public, non-secret)](#frontend-frontendenvlocal--public-non-secret)
     - [Backend (`backend/.env` — copy from `.env.example`, never commit `.env`)](#backend-backendenv--copy-from-envexample-never-commit-env)
@@ -694,6 +695,18 @@ Open http://localhost:3000 and register an account (registration signs you in au
 
 ---
 
+## Deployment
+
+The **backend** is prepared for deployment on **Render** (Docker web service) —
+see [`Deployment.md`](Deployment.md). The build uses the project's locked uv
+environment (`backend/Dockerfile`), Render's Blueprint config lives in
+[`render.yaml`](render.yaml), and the schema is applied at deploy time with
+`alembic upgrade head` (Neon PostgreSQL, revision `133b5978bcff`). The frontend
+is deliberately **not** deployed yet (Phase 10 adds its origin to
+`ALLOWED_ORIGINS`).
+
+---
+
 ## Environment Variables
 
 ### Frontend (`frontend/.env.local` — public, non-secret)
@@ -710,7 +723,9 @@ The frontend contains **no** secrets.
 | --- | --- | --- |
 | `APP_NAME` / `APP_VERSION` / `DEBUG` | Service metadata / debug mode | No |
 | `ALLOWED_ORIGINS` | CORS allowlist (comma-separated; default `http://localhost:3000`) | No |
+| `ENVIRONMENT` | `development` (default), `testing`, or `production` — turns on production fail-fast validators | No |
 | `DATABASE_URL` | SQLAlchemy async URL (default `sqlite+aiosqlite:///./flight_assistant.db`) | No |
+| `TEST_DATABASE_URL` | Isolated SQLite temp file used **only** by the automated test stack | No |
 | `DEFAULT_PROVIDER` | `gemini` or `groq` | No |
 | `GEMINI_API_KEY` | Gemini API key | ✅ Yes |
 | `GEMINI_MODEL` | Gemini model name (e.g. `gemini-3.5-flash-lite`) | No |
@@ -783,7 +798,7 @@ Completed, self-contained full-stack project: backend (agents, tools, guardrails
 - **Payments** — optional backend-only Stripe module; no checkout UI; booking works without payment.
 - **Concurrency model** — SQLite single-file DB is development-grade; the SQLAlchemy models migrate to PostgreSQL.
 - **AI integration** — the guarded agentic flow is wired to `POST /api/assistant/chat`; the handoff/triage and booking-agent flows ship as standalone reference demos for comparison.
-- **Portfolio scope** — a well-tested local MVP, **not deployed** and **not production-hardened** (e.g., dev JWT default, single-user workflow focus).
+- **Portfolio scope** — a well-tested local MVP. The backend ships with a production deployment setup (Render + Neon, see [Deployment](#deployment) and `Deployment.md`); the frontend deployment is Phase 10.
 
 ### Not in scope
 

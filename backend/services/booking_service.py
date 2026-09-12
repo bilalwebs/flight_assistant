@@ -17,6 +17,7 @@ from models.flight import Flight
 from models.user import User
 from models.responses import BookingSchema, PassengerSchema, BookingResponse
 from services.flight_service import FlightService
+from utils.datetime_utils import utcnow
 
 
 class BookingService:
@@ -313,7 +314,7 @@ class BookingService:
 
             # Transition to CONFIRMED
             booking.status = BookingStatus.CONFIRMED
-            booking.updated_at = datetime.utcnow()
+            booking.updated_at = utcnow()
             await session.flush()
 
             return BookingResponse(
@@ -440,9 +441,9 @@ class BookingService:
 
             # Transition to CANCELLED
             booking.status = BookingStatus.CANCELLED
-            booking.cancelled_at = datetime.utcnow()
+            booking.cancelled_at = utcnow()
             booking.cancellation_reason = reason or "User-initiated cancellation"
-            booking.updated_at = datetime.utcnow()
+            booking.updated_at = utcnow()
 
             await session.flush()
 

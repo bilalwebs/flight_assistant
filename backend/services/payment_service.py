@@ -5,7 +5,6 @@ Business logic for payment operations: creation, verification, and booking confi
 Handles Stripe checkout sessions, webhook verification, and idempotency.
 """
 import uuid
-from datetime import datetime
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +12,7 @@ import stripe
 
 from config.settings import STRIPE_SECRET_KEY
 from models.booking import Booking, BookingStatus, Payment, PaymentStatus, PaymentMethod
+from utils.datetime_utils import utcnow
 from models.responses import BookingResponse
 from services.booking_service import BookingService
 
@@ -270,7 +270,7 @@ class PaymentService:
                 payment.stripe_charge_id = stripe_charge_id
                 payment.stripe_payment_intent_id = stripe_payment_intent_id
                 payment.stripe_event_id = event_id
-                payment.paid_at = datetime.utcnow()
+                payment.paid_at = utcnow()
                 await session.flush()
 
                 # 4. Confirm the booking using BookingService

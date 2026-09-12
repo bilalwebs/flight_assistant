@@ -3,7 +3,6 @@ Flight SQLAlchemy ORM model.
 Designed so a real flight-API service can replace seed data without schema changes.
 """
 import enum
-from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime, Enum as SAEnum,
     Boolean, Text, CheckConstraint,
@@ -11,6 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from database.database import Base
+from utils.datetime_utils import utcnow
 
 
 class CabinClass(str, enum.Enum):
@@ -44,6 +44,8 @@ class Flight(Base):
     destination_country = Column(String(100), nullable=False)
 
     # Times
+    # Schedule instants are persisted as naive UTC (consistent with seed data,
+    # tools, agents and search comparisons) — TIMESTAMP WITHOUT TIME ZONE on PG.
     departure_time = Column(DateTime, nullable=False, index=True)
     arrival_time = Column(DateTime, nullable=False)
     duration_minutes = Column(Integer, nullable=False)
@@ -69,8 +71,8 @@ class Flight(Base):
     aircraft_type = Column(String(50), nullable=True)
     status = Column(SAEnum(FlightStatus), nullable=False, default=FlightStatus.SCHEDULED)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     # Relationships
     bookings = relationship("Booking", back_populates="flight", lazy="selectin")

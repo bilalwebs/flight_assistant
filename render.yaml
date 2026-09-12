@@ -1,0 +1,44 @@
+# Render Blueprint — Flight Assistant AI, backend only (Phase 9).
+# Frontend is intentionally NOT deployed (Phase 10).
+#
+# Repo must be connected in Render, and these secret env vars must be set in the
+# dashboard (their values are never stored in this file):
+#   DATABASE_URL     → Neon PostgreSQL URL (postgresql://…, sync:false below)
+#   JWT_SECRET_KEY   → strong secret, >= 32 chars
+#   ALLOWED_ORIGINS  → explicit origins (frontend origin is added in Phase 10)
+#   GEMINI_API_KEY / GROQ_API_KEY → provider key(s)
+services:
+  - type: web
+    name: flight-assistant-backend
+    runtime: docker
+    repo: https://github.com/bilalwebs/flight_assistant
+    branch: main
+    rootDir: backend
+    dockerfilePath: Dockerfile
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_NAME
+        value: Flight Assistant AI
+      - key: APP_VERSION
+        value: "1.0.0"
+      - key: DEFAULT_PROVIDER
+        value: gemini
+      - key: DISABLE_TRACING
+        value: "true"
+      - key: PORT
+        value: "8100"
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

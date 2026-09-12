@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta
-from database.database import AsyncSessionLocal
+from database.database import AsyncSessionLocal, init_db
 from services.flight_service import FlightService
 from models.flight import CabinClass
 
@@ -85,4 +85,5 @@ async def test_flight_service():
             print(f"Retrieved details for invalid-uuid: {invalid_details}")
 
 if __name__ == "__main__":
+    asyncio.run(init_db())
     asyncio.run(test_flight_service())

@@ -5,7 +5,7 @@ Replace this module with a real flight-API integration in production.
 """
 import uuid
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,7 +85,9 @@ def _make_flight(
 
 def _build_flights() -> list[dict[str, Any]]:
     """Generate 30+ realistic flights across multiple routes and dates."""
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    # Schedule instants are persisted as naive UTC (columns are DateTime
+    # without timezone) — derive from aware UTC then strip the offset.
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
     flights = []
 
     # Helper to add flights for multiple departure days
@@ -333,27 +335,39 @@ def _build_users() -> list[dict[str, Any]]:
 
 async def seed_database(session: AsyncSession) -> dict[str, int]:
     """
-    Insert seed data only if the tables are empty.
-    Returns counts of inserted records.
+    Insert seed data idempotently.
+
+    - Flights are inserted only when the ``flights`` table is empty, which is
+      the canonical signal that the schema was never initialized. Re-running
+      the seed on an already populated database never adds or rewrites flights.
+    - Demo users are keyed by their unique email: each is inserted only when
+      the email is not already present. Running the seed twice (or on a
+      database that has flights but is missing a demo user) inserts only the
+      missing demo users — never duplicates.
+
+    No bookings, passengers or payments are ever created. Returns counts of
+    newly inserted records.
     """
     counts = {"flights": 0, "users": 0}
 
-    # Check if already seeded
+    # Flights: canonical initial load for an empty schema. Once any flight
+    # exists, flight seeding is skipped so repeat runs cannot duplicate rows.
     existing = await session.execute(select(Flight).limit(1))
-    if existing.scalars().first():
-        return counts   # already seeded, skip
+    if not existing.scalars().first():
+        flight_dicts = _build_flights()
+        for fdata in flight_dicts:
+            session.add(Flight(**fdata))
+        counts["flights"] = len(flight_dicts)
 
-    # Insert flights
-    flight_dicts = _build_flights()
-    for fdata in flight_dicts:
-        session.add(Flight(**fdata))
-    counts["flights"] = len(flight_dicts)
-
-    # Insert users
+    # Users: demo accounts are additive and email-keyed. Each user is inserted
+    # only if its canonical email does not already exist, so these passes are
+    # repeat-safe and restore missing demo users without touching existing ones.
     user_dicts = _build_users()
+    existing_emails = set((await session.execute(select(User.email))).scalars())
     for udata in user_dicts:
-        session.add(User(**udata))
-    counts["users"] = len(user_dicts)
+        if udata["email"] not in existing_emails:
+            session.add(User(**udata))
+            counts["users"] += 1
 
     await session.commit()
     return counts

@@ -3,11 +3,11 @@ User SQLAlchemy ORM model.
 Authentication-ready structure (password_hash placeholder for Phase 2).
 """
 import enum
-from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Enum as SAEnum, Boolean
 from sqlalchemy.orm import relationship
 
 from database.database import Base
+from utils.datetime_utils import utcnow
 
 
 class MembershipTier(str, enum.Enum):
@@ -30,8 +30,8 @@ class User(Base):
     loyalty_points = Column(String(20), nullable=False, default="0")   # stored as string to avoid float precision
 
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     # Relationships
     bookings = relationship("Booking", back_populates="user", lazy="selectin")
