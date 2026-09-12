@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "main.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{tests/**,**/*.env,*.db*,PHASE_13_VERIFICATION_REPORT.md,SETUP_MODELS.md}"
+    }
+  }
+}
