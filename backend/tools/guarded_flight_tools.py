@@ -1,17 +1,23 @@
 """
 Phase 10 — Guarded Flight Tools.
 
-Wraps existing Phase 4 flight tools with input/output guardrails.
+Attaches tool input guardrails to all flight tools WITHOUT modifying the
+original unguarded tools from tools.flight_tools.
 
-This layer does NOT modify the original tools; it creates new tool instances
-with guardrails attached. The original unguarded tools remain available for
-non-production or development use.
+How this works:
+  * `validate_flight_tool_inputs` is ALREADY a ToolInputGuardrail instance
+    produced by the @tool_input_guardrail decorator — we attach it directly
+    and never wrap it a second time.
+  * The Agents SDK provides FunctionTool.__copy__ specifically so tools can be
+    duplicated into new instances. This module uses that copy to give every
+    guarded tool its OWN guardrail list, so guardrails never leak onto the
+    shared unguarded tools (which the REST/lower layers keep using unchanged).
 
-The guardrails validate arguments before tool execution and can short-circuit
-obviously invalid calls (e.g., negative prices, origin==destination) before
-they reach FlightService.
+Tool names, JSON schemas, description and execution behavior are preserved
+because each guarded tool is a copy of the original with only the
+`tool_input_guardrails` field overridden.
 """
-from agents.tool_guardrails import ToolInputGuardrail
+import copy
 
 from guardrails.tool_guardrails import validate_flight_tool_inputs
 from tools.flight_tools import (
@@ -25,47 +31,26 @@ from tools.flight_tools import (
 )
 
 
-# Attach the tool input guardrail to all flight tools.
-# The guardrail will validate arguments before any tool is invoked.
-# Note: FunctionTool.tool_input_guardrails expects a list, or None (default).
-
-def add_guardrail_to_tool(tool, guardrail: ToolInputGuardrail):
-    """Attach a tool input guardrail to an existing FunctionTool."""
-    if tool.tool_input_guardrails is None:
-        tool.tool_input_guardrails = []
-    tool.tool_input_guardrails.append(guardrail)
-    return tool
+def _guard_tool(tool):
+    """Return a guarded copy of *tool*, leaving the original untouched."""
+    guarded_tool = copy.copy(tool)
+    guarded_tool.tool_input_guardrails = [validate_flight_tool_inputs]
+    return guarded_tool
 
 
-# Apply the guardrail to all flight tools.
-guardrail = ToolInputGuardrail(
-    guardrail_function=validate_flight_tool_inputs,
-    name="flight_tool_validation",
-)
-
-for tool in [search_flights, filter_flights, get_flight_details, find_flight_by_number,
-             compare_flights, calculate_flight_price, check_seat_availability]:
-    add_guardrail_to_tool(tool, guardrail)
-
-
-# Export the now-guarded tools for use in agents.
 GUARDED_FLIGHT_TOOLS = [
-    search_flights,
-    filter_flights,
-    get_flight_details,
-    find_flight_by_number,
-    compare_flights,
-    calculate_flight_price,
-    check_seat_availability,
+    _guard_tool(tool)
+    for tool in [
+        search_flights,
+        filter_flights,
+        get_flight_details,
+        find_flight_by_number,
+        compare_flights,
+        calculate_flight_price,
+        check_seat_availability,
+    ]
 ]
 
 __all__ = [
     "GUARDED_FLIGHT_TOOLS",
-    "search_flights",
-    "filter_flights",
-    "get_flight_details",
-    "find_flight_by_number",
-    "compare_flights",
-    "calculate_flight_price",
-    "check_seat_availability",
 ]

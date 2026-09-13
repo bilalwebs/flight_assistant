@@ -23,11 +23,43 @@ Architecture:
 The guardrail does NOT replace service validation; it short-circuits obviously
 bad calls.
 """
+import json
+
 from agents.tool_guardrails import (
     ToolGuardrailFunctionOutput,
     ToolInputGuardrailData,
     tool_input_guardrail,
 )
+
+
+def _normalize_tool_arguments(tool_arguments):
+    """Return tool arguments as a dict.
+
+    Depending on the Agents SDK version, ``data.context.tool_arguments`` is
+    delivered either as an already-parsed dict or as a raw JSON string. Accept
+    both forms and reject anything that cannot be decoded so that guardrail
+    validation is never silently bypassed.
+
+    Returns:
+        dict: the tool arguments.
+
+    Raises:
+        ValueError/TypeError: when the value is malformed or of an unexpected
+            type (which the caller converts into a guardrail rejection).
+    """
+    if tool_arguments is None:
+        return {}
+    if isinstance(tool_arguments, dict):
+        return tool_arguments
+    if isinstance(tool_arguments, str):
+        text = tool_arguments.strip()
+        if not text:
+            return {}
+        decoded = json.loads(text)
+        if isinstance(decoded, dict):
+            return decoded
+        raise TypeError("tool arguments did not decode to a JSON object")
+    raise TypeError(f"unexpected tool arguments type: {type(tool_arguments).__name__}")
 
 
 @tool_input_guardrail(name="flight_tool_input_validation")
@@ -43,28 +75,41 @@ def validate_flight_tool_inputs(data: ToolInputGuardrailData) -> ToolGuardrailFu
           - raise_exception: (reserved for critical failures)
     """
     tool_name = data.context.tool_name
-    args = data.context.tool_arguments or {}
+    try:
+        args = _normalize_tool_arguments(data.context.tool_arguments)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        return ToolGuardrailFunctionOutput.reject_content(
+            message=f"Invalid tool arguments: {e}",
+            output_info={
+                "tool": tool_name,
+                "violation": "malformed_tool_arguments",
+                "raw": str(data.context.tool_arguments)[:200],
+            },
+        )
 
     # ──────────────────────────────────────────────────────────────────────────
     # search_flights / filter_flights — route and date validation
     # ──────────────────────────────────────────────────────────────────────────
     if tool_name in ("search_flights", "filter_flights"):
-        origin = args.get("origin", "").strip().upper()
-        destination = args.get("destination", "").strip().upper()
+        origin = args.get("origin")
+        destination = args.get("destination")
 
-        # Origin must be present.
-        if not origin:
+        # Origin must be present and a non-empty string.
+        if not isinstance(origin, str) or not origin.strip():
             return ToolGuardrailFunctionOutput.reject_content(
                 message="Invalid flight search: origin airport code is required.",
                 output_info={"tool": tool_name, "violation": "missing_origin"},
             )
 
-        # Destination must be present.
-        if not destination:
+        # Destination must be present and a non-empty string.
+        if not isinstance(destination, str) or not destination.strip():
             return ToolGuardrailFunctionOutput.reject_content(
                 message="Invalid flight search: destination airport code is required.",
                 output_info={"tool": tool_name, "violation": "missing_destination"},
             )
+
+        origin = origin.strip().upper()
+        destination = destination.strip().upper()
 
         # Origin must not equal destination.
         if origin == destination:
@@ -75,9 +120,17 @@ def validate_flight_tool_inputs(data: ToolInputGuardrailData) -> ToolGuardrailFu
 
         # Date format check (if provided) — expect YYYY-MM-DD. The service will
         # do the full parse, but we can catch obvious typos like "06-09-2026".
-        date_str = args.get("date")
-        if date_str:
-            parts = str(date_str).split("-")
+        # Both search and filter tools declare the parameter as `departure_date`;
+        # `date` is accepted as a fallback key for older callers.
+        date_str = args.get("departure_date", args.get("date"))
+        if date_str is not None:
+            # Reject non-string date values so unexpected types cannot reach the service.
+            if not isinstance(date_str, str):
+                return ToolGuardrailFunctionOutput.reject_content(
+                    message=f"Invalid date format: expected a YYYY-MM-DD string, got {type(date_str).__name__}.",
+                    output_info={"tool": tool_name, "violation": "invalid_date_format", "value": str(date_str)},
+                )
+            parts = date_str.split("-")
             if len(parts) != 3:
                 return ToolGuardrailFunctionOutput.reject_content(
                     message=f"Invalid date format: {date_str}. Expected YYYY-MM-DD.",
@@ -207,28 +260,29 @@ def validate_flight_tool_inputs(data: ToolInputGuardrailData) -> ToolGuardrailFu
     # get_flight_details / find_flight_by_number — ID/number presence validation
     # ──────────────────────────────────────────────────────────────────────────
     if tool_name == "get_flight_details":
-        flight_id = args.get("flight_id", "").strip()
-        if not flight_id:
+        flight_id = args.get("flight_id")
+        if not isinstance(flight_id, str) or not flight_id.strip():
             return ToolGuardrailFunctionOutput.reject_content(
                 message="Invalid flight details request: flight_id is required.",
                 output_info={"tool": tool_name, "violation": "missing_flight_id"},
             )
         # Basic length sanity (UUIDs are 36 chars with hyphens; our DB uses them).
-        if len(flight_id) < 8:
+        if len(flight_id.strip()) < 8:
             return ToolGuardrailFunctionOutput.reject_content(
                 message=f"Invalid flight_id: too short ({flight_id}).",
                 output_info={"tool": tool_name, "violation": "flight_id_too_short", "value": flight_id},
             )
 
     if tool_name == "find_flight_by_number":
-        flight_number = args.get("flight_number", "").strip()
-        if not flight_number:
+        flight_number = args.get("flight_number")
+        if not isinstance(flight_number, str) or not flight_number.strip():
             return ToolGuardrailFunctionOutput.reject_content(
                 message="Invalid flight lookup: flight_number is required.",
                 output_info={"tool": tool_name, "violation": "missing_flight_number"},
             )
         # Sanity: flight numbers are typically 2-10 characters (e.g., EK-601, PK-201).
-        if len(flight_number) < 2 or len(flight_number) > 20:
+        stripped_number = flight_number.strip()
+        if len(stripped_number) < 2 or len(stripped_number) > 20:
             return ToolGuardrailFunctionOutput.reject_content(
                 message=f"Invalid flight_number: unusual length ({flight_number}).",
                 output_info={"tool": tool_name, "violation": "flight_number_unusual_length", "value": flight_number},
